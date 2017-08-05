@@ -1,0 +1,69 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description></description>
+  <keepDependencies>false</keepDependencies>
+  <properties/>
+  <scm class="hudson.scm.NullSCM"/>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers/>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command># set env variables
+export JAVA_HOME=/opt/app/jdk1.7.0_80
+export ANT_HOME=/opt/app/apache-ant-1.9.6
+export MVN_HOME=/opt/app/apache-maven-3.3.9
+export PATH=$JAVA_HOME/bin:$ANT_HOME/bin:$MVN_HOME/bin:$PATH
+component=ranger
+component_repo=https://github.com/apache/incubator-ranger.git
+MVN_LOCAL_REPO=/opt/appData/ciMavenRepos/$component
+
+
+if [ -d &quot;$component&quot; ]; then
+  cd $component
+  git reset --hard
+  git clean -f
+  git pull --verbose
+else
+  git clone $component_repo $component --verbose
+fi
+
+cd $WORKSPACE/$component
+mvn -DskipTests=false clean compile package install assembly:assembly -Dmaven.repo.local=$MVN_LOCAL_REPO
+
+FILES=**/target/*.tar.gz
+for f in $($FILES)
+do
+  baseName=`basename $f`
+  dirName=`dirname $f`
+
+  echo $baseName
+  echo $dirName
+
+  gpg --print-md md5 $f &gt; $dirName/$baseName.md5
+  gpg --print-md sha1 $f &gt; $dirName/$baseName.sha
+done
+
+
+
+
+
+</command>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers>
+    <hudson.tasks.ArtifactArchiver>
+      <artifacts>**/target/*.tar.gz*</artifacts>
+      <allowEmptyArchive>false</allowEmptyArchive>
+      <onlyIfSuccessful>false</onlyIfSuccessful>
+      <fingerprint>false</fingerprint>
+      <defaultExcludes>true</defaultExcludes>
+      <caseSensitive>true</caseSensitive>
+    </hudson.tasks.ArtifactArchiver>
+  </publishers>
+  <buildWrappers/>
+</project>

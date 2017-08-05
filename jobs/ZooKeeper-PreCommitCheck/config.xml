@@ -1,0 +1,67 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description></description>
+  <keepDependencies>false</keepDependencies>
+  <properties/>
+  <scm class="hudson.scm.NullSCM"/>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers/>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command># set env variables
+export JAVA_HOME=/opt/app/jdk1.7.0_80
+export ANT_HOME=/opt/app/apache-ant-1.9.6
+export MVN_HOME=/opt/app/apache-maven-3.3.9
+export PATH=$JAVA_HOME/bin:$ANT_HOME/bin:$MVN_HOME/bin:$PATH
+component=zookeeper
+component_repo=https://github.com/apache/zookeeper.git
+MVN_LOCAL_REPO=/opt/appData/ciMavenRepos/$component
+YETUS_HOME=/opt/yetus-0.4.0
+YETUS_PRECOMMIT=$YETUS_HOME/lib/precommit
+
+deleteDir()
+{
+dir=$1
+if [ -d &quot;$dir&quot; ]; then
+rm -rf $dir
+fi
+}
+downloadCode()
+{
+if [ -d &quot;$component&quot; ]; then
+  cd $component
+  git reset --hard
+  git clean -f
+  git pull --verbose
+else
+  git clone $component_repo $component --verbose
+fi
+cd $WORKSPACE
+}
+deleteDir ${WORKSPACE}/patchprocess 
+downloadCode
+source=$WORKSPACE/$component
+#patch=${WORKSPACE}/patchfile.patch
+patch=https://github.com/apache/zookeeper/pull/160.patch
+personality=$YETUS_PRECOMMIT/personality/zookeeper.sh
+
+$YETUS_PRECOMMIT/test-patch.sh --patch-dir=${WORKSPACE}/patchprocess --basedir=$source --run-tests $patch --personality=$personality</command>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers>
+    <hudson.tasks.ArtifactArchiver>
+      <artifacts>patchprocess/*</artifacts>
+      <allowEmptyArchive>false</allowEmptyArchive>
+      <onlyIfSuccessful>false</onlyIfSuccessful>
+      <fingerprint>false</fingerprint>
+      <defaultExcludes>true</defaultExcludes>
+      <caseSensitive>true</caseSensitive>
+    </hudson.tasks.ArtifactArchiver>
+  </publishers>
+  <buildWrappers/>
+</project>
