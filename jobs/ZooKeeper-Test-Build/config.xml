@@ -1,0 +1,151 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description></description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>branch</name>
+          <description>ZooKeeper branch to work with</description>
+          <choices class="java.util.Arrays$ArrayList">
+            <a class="string-array">
+              <string>master</string>
+              <string>branch-3.5</string>
+              <string>branch-3.4</string>
+              <string>release-3.5.3-rc1</string>
+            </a>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+        <hudson.model.TextParameterDefinition>
+          <name>pullRequestNumber</name>
+          <description>164 if pull request is https://github.com/apache/zookeeper/pull/164</description>
+          <defaultValue>0</defaultValue>
+        </hudson.model.TextParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <scm class="hudson.scm.NullSCM"/>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers/>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command>echo &quot;Branch=$branch&quot;
+echo &quot;Pull Request Number=$pullRequestNumber&quot;
+
+
+if [ $branch = &apos;branch-3.4&apos; ]; then
+  export JAVA_HOME=/opt/tools/jdk1.6.0_45
+else
+  export JAVA_HOME=/opt/tools/jdk1.7.0_80
+fi
+export ANT_HOME=/opt/tools/apache-ant-1.9.6
+export PATH=$JAVA_HOME/bin:$ANT_HOME/bin:$PATH
+component_repo=https://github.com/apache/zookeeper.git
+component=zookeeper
+MVN_LOCAL_REPO=/opt/appData/ciMavenRepos/$component
+BUILD_TOOL_HOME=/opt/tools/buildUtils
+TEST_REPORT_DIR=$WORKSPACE/report
+PATCH_DIR=$WORKSPACE/patches
+PATCH_DOWNLOAD_URL_BASE=https://patch-diff.githubusercontent.com/raw/apache/zookeeper/pull
+
+deleteDir()
+{
+dir=$1
+if [ -d &quot;$dir&quot; ]; then
+rm -rf $dir
+fi
+}
+
+clean()
+{
+deleteDir $TEST_REPORT_DIR
+mkdir $TEST_REPORT_DIR
+deleteDir $PATCH_DIR
+mkdir $PATCH_DIR
+}
+
+downloadCode()
+{
+if [ -d &quot;$component&quot; ]; then
+  cd $component
+  git reset --hard
+  git clean -fdx
+  git checkout $branch
+  git reset --hard
+  git clean -fdx
+  git pull --verbose
+  git log -2
+else
+  git clone $component_repo -b $branch $component --verbose
+  #git checkout $branch
+  cd $component
+  git log -2
+fi
+cd $WORKSPACE
+}
+applyPatch()
+{
+if [ $pullRequestNumber != 0 ]; then
+curl $PATCH_DOWNLOAD_URL_BASE/$pullRequestNumber.patch &gt;$PATCH_DIR/zk.patch
+else
+echo &quot;&quot; &gt;$PATCH_DIR/dummyPatch.patch
+fi
+if [ -f &quot;$PATCH_DIR/zk.patch&quot; ]; then
+cd $WORKSPACE/$component
+git apply $PATCH_DIR/zk.patch
+git status
+echo &quot;patch applied&quot;
+fi
+cd $WORKSPACE
+}
+
+reRunFailedTestCases()
+{
+logDir=$1
+cd $BUILD_TOOL_HOME
+faileTests=`./failedTestFinder.sh $logDir`
+echo &quot;Failed Test cases are:&quot;
+echo $faileTests
+
+#rerun test cases one by one
+cd $WORKSPACE/$component
+for i in $faileTests
+do
+ant test-core-java -Dtest.junit.maxmem=2048m -Dtestcase=$i -Dtest.junit.failbuild.ontestfailure=false -Dtest.junit.output.format=xml
+cp $WORKSPACE/$component/build/test/logs/* $TEST_REPORT_DIR/
+done
+}
+clean
+deleteDir $WORKSPACE/$component
+downloadCode
+applyPatch
+cd $WORKSPACE/$component
+ant clean test-core-java -Dtest.junit.threads=15 -Dtest.junit.failbuild.ontestfailure=false -Dtest.junit.output.format=xml
+cp $WORKSPACE/$component/build/test/logs/* $TEST_REPORT_DIR/
+reRunFailedTestCases $TEST_REPORT_DIR</command>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers>
+    <hudson.tasks.ArtifactArchiver>
+      <artifacts>patches/*</artifacts>
+      <allowEmptyArchive>false</allowEmptyArchive>
+      <onlyIfSuccessful>false</onlyIfSuccessful>
+      <fingerprint>false</fingerprint>
+      <defaultExcludes>true</defaultExcludes>
+      <caseSensitive>true</caseSensitive>
+    </hudson.tasks.ArtifactArchiver>
+    <hudson.tasks.junit.JUnitResultArchiver plugin="junit@1.2-beta-4">
+      <testResults>report/*.xml</testResults>
+      <keepLongStdio>false</keepLongStdio>
+      <testDataPublishers/>
+      <healthScaleFactor>1.0</healthScaleFactor>
+    </hudson.tasks.junit.JUnitResultArchiver>
+  </publishers>
+  <buildWrappers/>
+</project>

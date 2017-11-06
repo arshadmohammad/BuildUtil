@@ -1,0 +1,67 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description></description>
+  <keepDependencies>false</keepDependencies>
+  <properties/>
+  <scm class="hudson.scm.NullSCM"/>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers/>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command># set env variables
+export JAVA_HOME=/opt/app/jdk1.8.0_101
+export ANT_HOME=/opt/app/apache-ant-1.9.6
+export MVN_HOME=/opt/app/apache-maven-3.3.9
+export PATH=$JAVA_HOME/bin:$ANT_HOME/bin:$MVN_HOME/bin:/opt/app/protobuff-bin:$PATH
+component=hadoop
+component_repo=https://github.com/apache/hadoop.git
+component_branch=rel/release-3.0.0-alpha1
+MVN_LOCAL_REPO=/opt/appData/ciMavenRepos/$component
+RESOURCE_DIR=/opt/appData/ciResources
+
+if [ -d &quot;$component&quot; ]; then
+  cd $component
+  #rm -r $component
+  #git reset --hard
+  #git clean -f
+  #git pull --verbose
+  #git clone $component_repo $component --verbose
+  git checkout $component_branch
+else 
+  git clone $component_repo -b $component_branch $component --verbose  
+fi
+
+cd $WORKSPACE/hadoop/hadoop-maven-plugins
+mvn install -DskipTests -Dmaven.repo.local=$MVN_LOCAL_REPO
+
+#copy resources
+mkdir -p $WORKSPACE/hadoop/hadoop-common-project/hadoop-kms/downloads
+cp -f $RESOURCE_DIR/apache-tomcat-6.0.44.tar.gz $WORKSPACE/hadoop/hadoop-common-project/hadoop-kms/downloads/
+mkdir -p $WORKSPACE/hadoop/hadoop-hdfs-project/hadoop-hdfs-httpfs/downloads
+cp -f $RESOURCE_DIR/apache-tomcat-6.0.44.tar.gz $WORKSPACE/hadoop/hadoop-hdfs-project/hadoop-hdfs-httpfs/downloads
+
+cd $WORKSPACE/hadoop
+mvn install package -Pdist -Dtar -DskipTests -Dmaven.repo.local=$MVN_LOCAL_REPO
+
+
+
+</command>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers>
+    <hudson.tasks.ArtifactArchiver>
+      <artifacts>**/target/*.tar.gz*</artifacts>
+      <allowEmptyArchive>false</allowEmptyArchive>
+      <onlyIfSuccessful>false</onlyIfSuccessful>
+      <fingerprint>false</fingerprint>
+      <defaultExcludes>true</defaultExcludes>
+      <caseSensitive>true</caseSensitive>
+    </hudson.tasks.ArtifactArchiver>
+  </publishers>
+  <buildWrappers/>
+</project>
